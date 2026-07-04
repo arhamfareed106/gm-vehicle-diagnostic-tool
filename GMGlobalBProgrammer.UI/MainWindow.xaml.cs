@@ -1,8 +1,11 @@
 ﻿using System.IO;
 using System.Windows;
+using System.Windows.Media;
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using GMGlobalBProgrammer.Core.J2534;
+using GMGlobalBProgrammer.Core.Functions;
 
 namespace GMGlobalBProgrammer.UI;
 
@@ -11,6 +14,8 @@ public partial class MainWindow : Window
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainWindow> _logger;
     private readonly IJ2534Manager _j2534Manager;
+    private IBatteryMonitor _batteryMonitor;
+    private CancellationTokenSource _batteryMonitorCts;
     
     // Parameterless constructor for XAML designer support
     public MainWindow() : this(null!, null!)
@@ -211,5 +216,152 @@ public partial class MainWindow : Window
     private void SaveLogButton_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show("Save log functionality");
+    }
+    
+    private void BatteryButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Hide all panels
+        SBATPanel.Visibility = Visibility.Collapsed;
+        VINWritePanel.Visibility = Visibility.Collapsed;
+        InjectorPanel.Visibility = Visibility.Collapsed;
+        BatteryPanel.Visibility = Visibility.Visible;
+        
+        StatusText.Text = "Battery voltage monitoring selected";
+    }
+    
+    private async void ReadBatteryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_batteryMonitor == null)
+        {
+            MessageBox.Show("Please connect to a device first.", "Not Connected", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        
+        StatusText.Text = "Reading battery voltage...";
+        ReadBatteryButton.IsEnabled = false;
+        
+        try
+        {
+            var result = await _batteryMonitor.ReadBatteryVoltageAsync();
+            
+            if (result.Success)
+            {
+                UpdateBatteryDisplay(result);
+                StatusText.Text = "Battery voltage read successfully";
+            }
+            else
+            {
+                MessageBox.Show($"Failed to read battery voltage: {result.ErrorMessage}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Failed to read battery voltage";
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error reading battery voltage: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusText.Text = "Error reading battery voltage";
+        }
+        finally
+        {
+            ReadBatteryButton.IsEnabled = true;
+        }
+    }
+    
+    private async void StartBatteryMonitorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_batteryMonitor == null)
+        {
+            MessageBox.Show("Please connect to a device first.", "Not Connected", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        
+        StartBatteryMonitorButton.IsEnabled = false;
+        StopBatteryMonitorButton.IsEnabled = true;
+        BatteryStatusText.Text = "Monitoring...";
+        StatusText.Text = "Battery monitoring started";
+        
+        _batteryMonitorCts = new CancellationTokenSource();
+        
+        try
+        {
+            await _batteryMonitor.StartContinuousMonitoringAsync(UpdateBatteryTopDisplay, _batteryMonitorCts.Token);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Battery monitoring error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            StartBatteryMonitorButton.IsEnabled = true;
+            StopBatteryMonitorButton.IsEnabled = false;
+            BatteryStatusText.Text = "Not Monitoring";
+            StatusText.Text = "Battery monitoring stopped";
+        }
+    }
+    
+    private void StopBatteryMonitorButton_Click(object sender, RoutedEventArgs e)
+    {
+        _batteryMonitorCts?.Cancel();
+        StartBatteryMonitorButton.IsEnabled = true;
+        StopBatteryMonitorButton.IsEnabled = false;
+        BatteryStatusText.Text = "Not Monitoring";
+        StatusText.Text = "Battery monitoring stopped";
+    }
+    
+    private void UpdateBatteryTopDisplay(BatteryVoltageResult result)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (result.Success)
+            {
+                BatteryVoltageText.Text = $"{result.Voltage:F2}V";
+                BatteryStatusText.Text = result.Status;
+                
+                // Update health indicator color
+                BatteryHealthIndicator.Fill = GetHealthColor(result.Voltage);
+            }
+            else
+            {
+                BatteryVoltageText.Text = "Error";
+                BatteryStatusText.Text = result.ErrorMessage;
+                BatteryHealthIndicator.Fill = new SolidColorBrush(Colors.Gray);
+            }
+        });
+    }
+    
+    private void UpdateBatteryDisplay(BatteryVoltageResult result)
+    {
+        if (result.Success)
+        {
+            DetailedVoltageText.Text = $"{result.Voltage:F2}V";
+            DetailedStatusText.Text = result.Status;
+            LastUpdatedText.Text = result.Timestamp.ToString("HH:mm:ss");
+            HealthStatusText.Text = result.IsHealthy ? "Healthy" : "Attention Required";
+            DetailedHealthIndicator.Fill = GetHealthColor(result.Voltage);
+            
+            // Also update top display
+            BatteryVoltageText.Text = $"{result.Voltage:F2}V";
+            BatteryStatusText.Text = result.Status;
+            BatteryHealthIndicator.Fill = GetHealthColor(result.Voltage);
+        }
+        else
+        {
+            DetailedVoltageText.Text = "Error";
+            DetailedStatusText.Text = result.ErrorMessage;
+            DetailedHealthIndicator.Fill = new SolidColorBrush(Colors.Gray);
+        }
+    }
+    
+    private SolidColorBrush GetHealthColor(double voltage)
+    {
+        if (voltage < 11.5 || voltage > 15.5)
+            return new SolidColorBrush(Colors.Red);
+        else if (voltage < 12.0)
+            return new SolidColorBrush(Colors.Orange);
+        else if (voltage >= 12.0 && voltage <= 14.8)
+            return new SolidColorBrush(Colors.Green);
+        else if (voltage > 14.8)
+            return new SolidColorBrush(Colors.Blue);
+        else
+            return new SolidColorBrush(Colors.Gray);
     }
 }

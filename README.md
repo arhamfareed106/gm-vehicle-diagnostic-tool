@@ -1,10 +1,11 @@
 # GM Global B Vehicle Programming Tool
 
 ## Overview
-This is a complete Windows desktop application for programming GM Global B vehicles using J2534 Pass-Thru interfaces. The application provides three core functions:
+This is a complete Windows desktop application for programming GM Global B vehicles using J2534 Pass-Thru interfaces. The application provides four core functions:
 1. SBAT (System Burn-In and Test) requests
 2. VIN writing/changing
 3. Injector programming with CAN log parsing
+4. Battery voltage monitoring with real-time display
 
 ## Features
 - Multi-vendor J2534 support (GM MDI2, DrewTech Mongoose, Dearborn DPA5, etc.)
@@ -12,6 +13,8 @@ This is a complete Windows desktop application for programming GM Global B vehic
 - UDS (Unified Diagnostic Services) implementation
 - GM Global B security access (seed/key) algorithms
 - Real-time CAN logging with filtering
+- **Battery voltage monitoring with health status indicators**
+- **Continuous voltage monitoring with automatic updates**
 - Professional WPF UI with dark/light theme support
 - Comprehensive error handling and retry mechanisms
 
@@ -58,7 +61,12 @@ The application follows a clean architecture pattern with the following layers:
 2. **SBAT Function**: Click "SBAT" button and then "Request SBAT" to execute system burn-in test
 3. **VIN Writing**: Click "VIN Write" button, enter the new 17-character VIN, and click "Write VIN"
 4. **Injector Programming**: Click "Injector" button, load a CAN log file with calibration data, and click "Program Injectors"
-5. **CAN Logging**: Monitor real-time CAN communication in the log panel at the bottom
+5. **Battery Monitoring**: 
+   - View real-time battery voltage in the connection panel
+   - Click "Start Monitor" for continuous voltage updates
+   - Click "Battery Info" button for detailed voltage information and health status
+   - Monitor voltage ranges: Critical Low (<11.5V), Low (11.5-12.0V), Normal (12.0-14.8V), High (14.8-15.5V), Critical High (>15.5V)
+6. **CAN Logging**: Monitor real-time CAN communication in the log panel at the bottom
 
 ## Technical Details
 
@@ -102,7 +110,8 @@ GMGlobalBProgrammer/
 │   ├── Functions/
 │   │   ├── SBATFunction.cs
 │   │   ├── VINWriter.cs
-│   │   └── InjectorProgrammer.cs
+│   │   ├── InjectorProgrammer.cs
+│   │   └── BatteryMonitor.cs
 │   ├── J2534/
 │   │   ├── IJ2534Device.cs
 │   │   ├── J2534Device.cs
@@ -152,6 +161,7 @@ dotnet run
 - Multi-language support
 - Remote programming capabilities
 - Integration with vehicle databases
+- Historical battery voltage trending and analytics
 
 ## Support
 For issues and feature requests, please contact the development team.
